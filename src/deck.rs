@@ -39,4 +39,12 @@ impl Deck {
     pub fn draw(&mut self) -> Option<Card> {
         self.cards.pop()
     }
+
+    pub fn notation(&self) -> String {
+        self.cards
+            .iter()
+            .map(Card::notation)
+            .collect::<Vec<_>>()
+            .concat()
+    }
 }

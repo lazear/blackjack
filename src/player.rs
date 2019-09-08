@@ -1,4 +1,5 @@
 use super::*;
+use std::fmt;
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Player {
@@ -34,30 +35,36 @@ pub struct Hand {
 }
 
 impl Hand {
-    pub fn first(&self) -> Option<&Card> {
-        self.cards.get(0)
-    }
-
-    pub fn second(&self) -> Option<&Card> {
-        self.cards.get(1)
-    }
-
-    pub fn initial_hand(&self) -> Option<Value> {
+    pub fn initial_hand(&self) -> Option<u8> {
         Some(*self.cards.get(0)? + *self.cards.get(1)?)
     }
 
-    pub fn score(&self) -> Value {
-        self.cards
-            .iter()
-            .fold(Value::Hard(0), |acc, x| acc + x.value())
+    pub fn score(&self) -> u8 {
+        let mut score = 0;
+        for c in &self.cards {
+            if score > 21 && c.rank == Rank::Ace {
+                score += 1;
+            } else {
+                score += c.value()
+            }
+        }
+        score
+    }
+
+    pub fn soft(&self) -> bool {
+        self.ace_count() >= 1
+    }
+
+    pub fn ace_count(&self) -> usize {
+        self.cards.iter().filter(|c| c.soft()).count()
     }
 
     pub fn blackjack(&self) -> bool {
-        self.initial_hand().unwrap_or(Value::Hard(0)) == Value::Soft(21)
+        self.initial_hand().unwrap_or(0) == 21
     }
 
     pub fn bust(&self) -> bool {
-        self.score().busted()
+        self.score() > 21
     }
 
     pub fn is_splittable(&self) -> bool {
@@ -75,14 +82,18 @@ impl Hand {
     pub fn deal(&mut self, card: Card) {
         self.cards.push(card)
     }
+}
 
-    pub fn soft(&self) -> bool {
-        let mut soft = false;
-        for c in &self.cards {
-            if c.rank == Rank::Ace {
-                soft = true;
-            }
-        }
-        soft
+impl fmt::Display for Hand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.cards
+                .iter()
+                .map(Card::notation)
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
     }
 }

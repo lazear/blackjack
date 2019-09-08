@@ -32,15 +32,39 @@ pub enum Rank {
     Ace,
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
-pub enum Value {
-    Hard(u8),
-    Soft(u8),
+impl std::ops::Deref for Card {
+    type Target = Rank;
+    fn deref(&self) -> &Self::Target {
+        &self.rank
+    }
 }
 
 impl Card {
-    pub fn value(self) -> Value {
-        self.rank.value()
+    pub fn notation(&self) -> String {
+        format!(
+            "{}{}",
+            match self.rank {
+                Two => "2",
+                Three => "3",
+                Four => "4",
+                Five => "5",
+                Six => "6",
+                Seven => "7",
+                Eight => "8",
+                Nine => "9",
+                Ten => "10",
+                Ace => "A",
+                King => "K",
+                Queen => "Q",
+                Jack => "J",
+            },
+            match self.suit {
+                Hearts => 'h',
+                Clubs => 'c',
+                Spades => 's',
+                Diamonds => 'd',
+            }
+        )
     }
 }
 
@@ -52,66 +76,41 @@ impl Rank {
         }
     }
 
-    pub fn value(self) -> Value {
+    pub fn value(self) -> u8 {
         match self {
-            Two => Value::Hard(2),
-            Three => Value::Hard(3),
-            Four => Value::Hard(4),
-            Five => Value::Hard(5),
-            Six => Value::Hard(6),
-            Seven => Value::Hard(7),
-            Eight => Value::Hard(8),
-            Nine => Value::Hard(9),
-            Ten => Value::Hard(10),
-            Jack => Value::Hard(10),
-            Queen => Value::Hard(10),
-            King => Value::Hard(10),
-            Ace => Value::Soft(11),
-        }
-    }
-}
-
-impl Value {
-    pub fn busted(self) -> bool {
-        self.min() > 21
-    }
-
-    pub fn max(self) -> u8 {
-        match self {
-            Value::Hard(val) => val,
-            Value::Soft(val) => val,
+            Two => 2,
+            Three => 3,
+            Four => 4,
+            Five => 5,
+            Six => 6,
+            Seven => 7,
+            Eight => 8,
+            Nine => 9,
+            Ten => 10,
+            Jack => 10,
+            Queen => 10,
+            King => 10,
+            Ace => 11,
         }
     }
 
-    pub fn min(self) -> u8 {
+    pub fn soft(self) -> bool {
         match self {
-            Value::Hard(val) => val,
-            Value::Soft(val) => val - 10,
-        }
-    }
-}
-
-impl std::ops::Add for Value {
-    type Output = Self;
-    fn add(self, rhs: Value) -> Self::Output {
-        match (self, rhs) {
-            (Value::Hard(a), Value::Hard(b)) => Value::Hard(a + b),
-            (Value::Hard(a), Value::Soft(b)) => Value::Soft(a + b),
-            (Value::Soft(a), Value::Hard(b)) => Value::Soft(a + b),
-            (Value::Soft(a), Value::Soft(b)) => Value::Soft(a + b),
+            Ace => true,
+            _ => false,
         }
     }
 }
 
 impl std::ops::Add for Rank {
-    type Output = Value;
+    type Output = u8;
     fn add(self, rhs: Self) -> Self::Output {
         self.value() + rhs.value()
     }
 }
 
 impl std::ops::Add for Card {
-    type Output = Value;
+    type Output = u8;
     fn add(self, rhs: Self) -> Self::Output {
         self.rank + rhs.rank
     }
@@ -126,16 +125,5 @@ impl std::fmt::Display for Card {
 impl std::fmt::Debug for Card {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?} of {:?}", self.rank, self.suit)
-    }
-}
-
-mod tests {
-    use super::*;
-
-    #[test]
-    fn add_cards() {
-        let a = Two;
-        let b = Ace;
-        assert_eq!(a + b, Value::Soft(13));
     }
 }
