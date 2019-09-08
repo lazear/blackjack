@@ -121,10 +121,14 @@ fn main() {
             view.dealer,
             view.dealer.score()
         );
-        if view.player.score() < 17 && view.dealer.score() > 6 {
-            view = game.action(Action::Hit).unwrap();
+        let action = if view.player.score() < 17 && view.dealer.score() > 6 {
+            Action::Hit
         } else {
-            view = game.action(Action::Stand).unwrap();
+            Action::Stand
+        };
+        view = match game.action(action) {
+            Ok(view) => view,
+            Err(e) => panic!("Error encountered!: {:?}", e),
         }
     }
 
