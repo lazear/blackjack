@@ -14,6 +14,13 @@ pub struct Game {
     player: Player,
     bet: usize,
     state: State,
+    last: Last,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum Last {
+    Dealer(Card),
+    Player(Card),
 }
 
 /// Player's states.
@@ -41,6 +48,7 @@ pub struct View {
     pub dealer: Hand,
     pub player: Player,
     pub state: State,
+    pub last: Last,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -60,6 +68,7 @@ impl Game {
         match action {
             Action::Hit => {
                 let card = self.draw()?;
+                self.last = Last::Player(card);
                 self.player.deal(card);
             }
             Action::Stand => {
@@ -74,6 +83,7 @@ impl Game {
                 self.bet *= self.bet;
 
                 let card = self.draw()?;
+                self.last = Last::Player(card);
                 self.player.deal(card);
             }
             Action::Split => {}
@@ -94,6 +104,7 @@ impl Game {
             dealer,
             player: self.player.clone(),
             state: self.state,
+            last: self.last,
         }
     }
 
@@ -105,6 +116,10 @@ impl Game {
             player,
             bet: 0,
             state: State::Ready,
+            last: Last::Player(Card {
+                rank: Rank::Three,
+                suit: Suit::Clubs,
+            }),
         }
     }
 
@@ -115,6 +130,7 @@ impl Game {
             self.player.deal(c);
             let c = self.draw()?;
             self.dealer.deal(c);
+            self.last = Last::Dealer(c);
         }
         Ok(())
     }
@@ -135,6 +151,9 @@ impl Game {
     /// Once the game is in Ready state, the player may place a bet and be
     /// dealt a hand of cards
     pub fn bet(&mut self, bet: usize) -> Result<View, Error> {
+        // Don't let the player set their starting hand!
+        self.player.hand = Hand::default();
+
         if self.state != State::Ready {
             return Err(Error::InvalidAction);
         }
@@ -143,7 +162,9 @@ impl Game {
         } else if self.player.chips < bet {
             Err(Error::Money(bet - self.player.chips))
         } else {
+            assert_eq!(self.player.count(), 0);
             self.deal()?;
+            assert_eq!(self.player.count(), 2);
             self.player.chips -= bet;
             self.bet += bet;
             self.state = State::Player;
@@ -198,6 +219,7 @@ impl Game {
             self.state = State::Final(outcome)
         } else if self.dealer.score() < self.player.score() {
             let card = self.draw()?;
+            self.last = Last::Dealer(card);
             println!("Dealer draws a {}", &card);
             self.dealer.deal(card);
         }
@@ -214,5 +236,19 @@ impl Game {
         }
 
         Ok(self.view())
+    }
+
+    pub fn finish(mut self) -> Result<Player, Error> {
+        match self.state {
+            State::Final(fin) => match fin {
+                Outcome::Blackjack(win) => self.player.chips += win,
+                Outcome::Win(win) => self.player.chips += win,
+                Outcome::Push(win) => self.player.chips += win,
+                _ => {}
+            },
+            _ => return Err(Error::InvalidAction),
+        }
+
+        Ok(self.player)
     }
 }

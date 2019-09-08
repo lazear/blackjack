@@ -141,6 +141,8 @@ fn main() {
 
     println!("{:#?}", view);
 
+    println!("{:#?}", game.finish());
+
     // let res = game.play(10, basic_strategy);
 
     // println!("{:?}", res);
