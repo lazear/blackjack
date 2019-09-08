@@ -41,7 +41,7 @@ fn basic_strategy(view: &View) -> Action {
         }
     } else {
         match view.player.score() {
-            5 | 6 | 7 => Action::Hit,
+            2 | 3 | 4 | 5 | 6 | 7 => Action::Hit,
             8 => {
                 if d == 5 || d == 6 {
                     Action::Double
@@ -98,20 +98,23 @@ fn main() {
 
     let mut game = Game::init(player);
     let mut view = game.bet(1).unwrap();
+    display_view(&view);
+    dbg!(&view);
     while view.states[view.active] == State::Player {
-        display_view(&view);
         let action = basic_strategy(&view);
         view = match game.action(action) {
             Ok(view) => view,
             Err(e) => panic!("Error encountered!: {:?}", e),
-        }
+        };
+        display_view(&view);
+        dbg!(&view);
     }
 
     while view.states[view.active] == blackjack::game::State::Dealer {
-        display_view(&view);
         view = game.update().unwrap();
+        display_view(&view);
+        dbg!(&view);
     }
-    dbg!(&view);
     player = game.finish().unwrap();
     println!("{}", player.chips);
 }

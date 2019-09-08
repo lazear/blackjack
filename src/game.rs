@@ -97,6 +97,7 @@ impl Game {
                         .cards
                         .pop()
                         .ok_or(Error::Fatal)?;
+
                     self.player.hands.push(Hand { cards: vec![card] });
                     self.states.push(State::Player);
                 }
@@ -215,6 +216,7 @@ impl Game {
         self.states[self.active] = state;
         if self.active < self.states.len() - 1 {
             self.active += 1;
+            self.player.active = self.active;
         }
     }
 
@@ -223,9 +225,9 @@ impl Game {
             State::Final(_) | State::Dealer | State::Error | State::Ready => return,
             _ => {}
         }
-        self.player.active = self.active;
+
         if self.player.blackjack() {
-            if self.dealer.blackjack() {
+            if self.dealer.blackjack() && self.states.len() == 0 {
                 self.update_state(State::Final(Outcome::Push(self.bet)));
             } else {
                 self.update_state(State::Final(Outcome::Blackjack(self.blackjack_amount())));
@@ -238,11 +240,14 @@ impl Game {
     }
 
     pub fn update(&mut self) -> Result<View, Error> {
-        if self.states.iter().filter(|s| *s == &State::Dealer).count() < 1 {
-            return Err(Error::InvalidAction);
+        for s in &self.states {
+            match s {
+                State::Dealer | State::Final(_) => {}
+                _ => return Err(Error::InvalidAction),
+            }
         }
 
-        if self.dealer.score() < 17 {
+        while self.dealer.score() < 17 {
             let card = self.draw()?;
             self.last = Last::Dealer(card);
             self.dealer.deal(card);
@@ -259,25 +264,9 @@ impl Game {
                 continue;
             }
 
-            // if self.dealer.blackjack() {
-            //     self.states[i] = State::Final(Outcome::Lose(self.bet));
-            //     return Ok(self.view());
-            // }
-
-            // else if self.dealer.score() >= 17 {
-            //     let outcome = if self.player.score() > 17 {
-            //         Outcome::Win(self.bet * 2)
-            //     } else if self.player.score() == 17 {
-            //         Outcome::Push(self.bet)
-            //     } else {
-            //         Outcome::Lose(self.bet)
-            //     };
-            //     self.states[self.active] = State::Final(outcome)
-            // }
-
             // We have now possibly drawn a card for the dealer, so check to see
             // if we have beaten the player
-            if self.dealer.bust() {
+            if self.dealer.bust() || self.dealer.score() < self.player.hands[i].score() {
                 self.states[i] = State::Final(Outcome::Win(self.bet * 2))
             } else if self.dealer.score() > self.player.hands[i].score() {
                 self.states[i] = State::Final(Outcome::Lose(self.bet))
