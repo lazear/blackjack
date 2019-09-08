@@ -13,7 +13,8 @@ pub struct Game {
     dealer: Hand,
     player: Player,
     bet: usize,
-    state: State,
+    states: Vec<State>,
+    active: usize,
     last: Last,
 }
 
@@ -37,7 +38,6 @@ pub enum Outcome {
 pub enum State {
     Ready,
     Player,
-    PlayerSplit,
     Dealer,
     Error,
     Final(Outcome),
@@ -47,7 +47,8 @@ pub enum State {
 pub struct View {
     pub dealer: Hand,
     pub player: Player,
-    pub state: State,
+    pub states: Vec<State>,
+    pub active: usize,
     pub last: Last,
 }
 
@@ -61,7 +62,7 @@ pub enum Error {
 
 impl Game {
     pub fn action(&mut self, action: Action) -> Result<View, Error> {
-        if self.state != State::Player {
+        if self.states[self.active] != State::Player {
             return Err(Error::InvalidAction);
         }
 
@@ -72,21 +73,34 @@ impl Game {
                 self.player.deal(card);
             }
             Action::Stand => {
-                self.state = State::Dealer;
+                self.update_state(State::Dealer);
             }
             Action::Double => {
                 if self.player.chips < self.bet {
                     return Err(Error::Money(self.bet - self.player.chips));
                 }
-                self.state = State::Dealer;
+                self.update_state(State::Dealer);
                 self.player.chips -= self.bet;
-                self.bet *= self.bet;
+                self.bet += self.bet;
 
                 let card = self.draw()?;
                 self.last = Last::Player(card);
                 self.player.deal(card);
             }
-            Action::Split => {}
+            Action::Split => {
+                if self.player.hands.len() > 1 && self.player.ace_count() > 0 {
+                    return Err(Error::InvalidAction);
+                }
+
+                if self.player.is_splittable() {
+                    let card = self.player.hands[self.player.active]
+                        .cards
+                        .pop()
+                        .ok_or(Error::Fatal)?;
+                    self.player.hands.push(Hand { cards: vec![card] });
+                    self.states.push(State::Player);
+                }
+            }
         }
 
         self.refresh();
@@ -94,7 +108,7 @@ impl Game {
     }
 
     pub fn view(&self) -> View {
-        let dealer = match self.state {
+        let dealer = match self.states[self.active] {
             State::Final(_) | State::Dealer => self.dealer.clone(),
             _ => Hand {
                 cards: self.dealer.cards[1..].to_vec(),
@@ -103,7 +117,8 @@ impl Game {
         View {
             dealer,
             player: self.player.clone(),
-            state: self.state,
+            states: self.states.clone(),
+            active: self.active,
             last: self.last,
         }
     }
@@ -115,7 +130,8 @@ impl Game {
             dealer: Hand::default(),
             player,
             bet: 0,
-            state: State::Ready,
+            states: vec![State::Ready],
+            active: 0,
             last: Last::Player(Card {
                 rank: Rank::Three,
                 suit: Suit::Clubs,
@@ -141,20 +157,36 @@ impl Game {
             Some(card) => Ok(card),
             None => {
                 self.player.chips += self.bet;
-                self.state = State::Error;
+                self.states[self.active] = State::Error;
                 self.bet = 0;
                 Err(Error::Fatal)
             }
         }
     }
 
+    pub fn test(&mut self) {
+        self.player.hands = vec![Hand {
+            cards: vec![
+                Card {
+                    rank: Rank::Ace,
+                    suit: Suit::Hearts,
+                },
+                Card {
+                    rank: Rank::Ace,
+                    suit: Suit::Clubs,
+                },
+            ],
+        }];
+    }
+
     /// Once the game is in Ready state, the player may place a bet and be
     /// dealt a hand of cards
     pub fn bet(&mut self, bet: usize) -> Result<View, Error> {
         // Don't let the player set their starting hand!
-        self.player.hand = Hand::default();
+        // self.player.hands = vec![Hand::default()];
+        // self.player.active = 0;
 
-        if self.state != State::Ready {
+        if self.states[self.active] != State::Ready {
             return Err(Error::InvalidAction);
         }
         if bet == 0 {
@@ -167,7 +199,7 @@ impl Game {
             assert_eq!(self.player.count(), 2);
             self.player.chips -= bet;
             self.bet += bet;
-            self.state = State::Player;
+            self.states[self.active] = State::Player;
 
             // Check for initial blackjack
             self.refresh();
@@ -179,74 +211,97 @@ impl Game {
         (self.bet as f64 * 2.5).floor() as usize
     }
 
+    fn update_state(&mut self, state: State) {
+        self.states[self.active] = state;
+        if self.active < self.states.len() - 1 {
+            self.active += 1;
+        }
+    }
+
     fn refresh(&mut self) {
-        match self.state {
+        match self.states[self.active] {
             State::Final(_) | State::Dealer | State::Error | State::Ready => return,
             _ => {}
         }
-
+        self.player.active = self.active;
         if self.player.blackjack() {
             if self.dealer.blackjack() {
-                self.state = State::Final(Outcome::Push(self.bet));
+                self.update_state(State::Final(Outcome::Push(self.bet)));
             } else {
-                self.state = State::Final(Outcome::Blackjack(self.blackjack_amount()));
+                self.update_state(State::Final(Outcome::Blackjack(self.blackjack_amount())));
             }
         }
 
         if self.player.bust() {
-            self.state = State::Final(Outcome::Lose(self.bet))
+            self.update_state(State::Final(Outcome::Lose(self.bet)));
         }
     }
 
-    /// Winnings are not transferred back to the player until finalize()
-    /// is called. This forces the round to go to completion
     pub fn update(&mut self) -> Result<View, Error> {
-        if self.state != State::Dealer {
+        if self.states.iter().filter(|s| *s == &State::Dealer).count() < 1 {
             return Err(Error::InvalidAction);
         }
 
-        if self.dealer.blackjack() {
-            self.state = State::Final(Outcome::Lose(self.bet));
-            return Ok(self.view());
-        } else if self.dealer.score() == 17 && self.dealer.soft() {
-            let outcome = if self.player.score() > 17 {
-                Outcome::Win(self.bet * 2)
-            } else if self.player.score() == 17 {
-                Outcome::Push(self.bet)
-            } else {
-                Outcome::Lose(self.bet)
-            };
-            self.state = State::Final(outcome)
-        } else if self.dealer.score() < self.player.score() {
+        if self.dealer.score() < 17 {
             let card = self.draw()?;
             self.last = Last::Dealer(card);
-            println!("Dealer draws a {}", &card);
             self.dealer.deal(card);
         }
 
-        // We have now possibly drawn a card for the dealer, so check to see
-        // if we have beaten the player
-        if self.dealer.bust() {
-            println!("Dealer went bust {}", self.dealer.score());
-            self.state = State::Final(Outcome::Win(self.bet * 2))
-        } else if self.dealer.score() > self.player.score() {
-            self.state = State::Final(Outcome::Lose(self.bet))
-        } else if self.dealer.score() == self.player.score() {
-            self.state = State::Final(Outcome::Push(self.bet))
+        for i in 0..self.states.len() {
+            if self.dealer.blackjack() {
+                if let State::Final(Outcome::Blackjack(_)) = self.states[i] {
+                    self.states[i] = State::Final(Outcome::Push(self.bet));
+                }
+            }
+
+            if self.states[i] != State::Dealer {
+                continue;
+            }
+
+            // if self.dealer.blackjack() {
+            //     self.states[i] = State::Final(Outcome::Lose(self.bet));
+            //     return Ok(self.view());
+            // }
+
+            // else if self.dealer.score() >= 17 {
+            //     let outcome = if self.player.score() > 17 {
+            //         Outcome::Win(self.bet * 2)
+            //     } else if self.player.score() == 17 {
+            //         Outcome::Push(self.bet)
+            //     } else {
+            //         Outcome::Lose(self.bet)
+            //     };
+            //     self.states[self.active] = State::Final(outcome)
+            // }
+
+            // We have now possibly drawn a card for the dealer, so check to see
+            // if we have beaten the player
+            if self.dealer.bust() {
+                self.states[i] = State::Final(Outcome::Win(self.bet * 2))
+            } else if self.dealer.score() > self.player.hands[i].score() {
+                self.states[i] = State::Final(Outcome::Lose(self.bet))
+            } else if self.dealer.score() == self.player.hands[i].score() {
+                self.states[i] = State::Final(Outcome::Push(self.bet))
+            }
         }
 
         Ok(self.view())
     }
 
+    /// Winnings are not transferred back to the player until finish()
+    /// is called. This forces the round to go to completion
     pub fn finish(mut self) -> Result<Player, Error> {
-        match self.state {
-            State::Final(fin) => match fin {
-                Outcome::Blackjack(win) => self.player.chips += win,
-                Outcome::Win(win) => self.player.chips += win,
-                Outcome::Push(win) => self.player.chips += win,
-                _ => {}
-            },
-            _ => return Err(Error::InvalidAction),
+        for i in 0..self.states.len() {
+            match self.states[i] {
+                State::Final(fin) => match fin {
+                    Outcome::Blackjack(win) => self.player.chips += win,
+                    Outcome::Win(win) => self.player.chips += win,
+                    Outcome::Push(win) => self.player.chips += win,
+                    _ => {}
+                },
+                _ => return Err(Error::InvalidAction),
+            }
         }
 
         Ok(self.player)

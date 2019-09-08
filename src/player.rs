@@ -3,27 +3,29 @@ use std::fmt;
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Player {
-    pub hand: Hand,
+    pub active: usize,
+    pub hands: Vec<Hand>,
     pub chips: usize,
 }
 
 impl std::ops::Deref for Player {
     type Target = Hand;
     fn deref(&self) -> &Self::Target {
-        &self.hand
+        &self.hands[self.active]
     }
 }
 
 impl std::ops::DerefMut for Player {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.hand
+        &mut self.hands[self.active]
     }
 }
 
 impl Player {
     pub fn new(chips: usize) -> Player {
         Player {
-            hand: Hand::default(),
+            active: 0,
+            hands: vec![Hand::default()],
             chips,
         }
     }
@@ -35,7 +37,7 @@ pub struct Hand {
 }
 
 impl Hand {
-    pub fn initial_hand(&self) -> Option<u8> {
+    fn initial_hand(&self) -> Option<u8> {
         Some(*self.cards.get(0)? + *self.cards.get(1)?)
     }
 
@@ -59,10 +61,12 @@ impl Hand {
         self.cards.iter().filter(|c| c.soft()).count()
     }
 
+    /// Does the player have blackjack?
     pub fn blackjack(&self) -> bool {
         self.initial_hand().unwrap_or(0) == 21
     }
 
+    /// Has the player busted?
     pub fn bust(&self) -> bool {
         self.score() > 21
     }
