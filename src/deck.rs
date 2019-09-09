@@ -8,17 +8,24 @@ pub struct Deck {
 
 impl Deck {
     /// Initialize a new deck that has been shuffled once
-    pub fn new() -> Deck {
+    pub fn new(count: usize) -> Deck {
         let suits = vec![Hearts, Spades, Clubs, Diamonds];
         let ranks = vec![
             Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace,
         ];
+
         let mut deck = Deck { cards: Vec::new() };
-        for suit in suits {
-            for rank in &ranks {
-                deck.cards.push(Card { rank: *rank, suit });
+        for _ in 0..count {
+            for suit in &suits {
+                for rank in &ranks {
+                    deck.cards.push(Card {
+                        rank: *rank,
+                        suit: *suit,
+                    });
+                }
             }
         }
+
         deck.shuffle();
         deck
     }

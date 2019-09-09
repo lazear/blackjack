@@ -1,12 +1,16 @@
 use blackjack;
 use blackjack::*;
 
-fn basic_strategy(view: &View) -> Action {
+fn basic_strategy(view: &View, idx: usize) -> Action {
     let d = view.dealer.score();
-    if view.player.is_splittable() {
-        Action::Split
-    } else if view.player.soft() {
-        match view.player.score() {
+    if view.player.can_split(idx) {
+        match view.player.hands[idx].score() {
+            10 | 12 => Action::Hit,
+            20 => Action::Stand,
+            _ => Action::Split,
+        }
+    } else if view.player.hands[idx].soft() {
+        match view.player.hands[idx].score() {
             13 | 14 | 15 | 16 => {
                 if d >= 4 && d <= 6 {
                     Action::Double
@@ -40,7 +44,7 @@ fn basic_strategy(view: &View) -> Action {
             _ => Action::Stand,
         }
     } else {
-        match view.player.score() {
+        match view.player.hands[idx].score() {
             2 | 3 | 4 | 5 | 6 | 7 => Action::Hit,
             8 => {
                 if d == 5 || d == 6 {
@@ -85,96 +89,77 @@ fn basic_strategy(view: &View) -> Action {
 
 fn display_view(view: &View) {
     println!(
-        "P: {} ({})\tD: {} ({})",
-        view.player.hands[view.player.active],
-        view.player.score(),
+        "P: {}\tD: {} ({})",
+        view.player
+            .hands
+            .iter()
+            .map(|h| format!("[{}]({})", h, h.score()))
+            .collect::<Vec<_>>()
+            .join(", "),
         view.dealer,
         view.dealer.score()
     );
 }
 
-fn main() {
-    let mut player = Player::new(100_000);
+fn simulate(rules: Ruleset, bankroll: usize, bet: usize, occurrences: usize) -> String {
+    let mut player = Player::new(bankroll);
+    let mut wins = 0;
+    let mut bj = 0;
+    let mut total = 0;
 
-    let mut game = Game::init(player);
-    let mut view = game.bet(1).unwrap();
-    display_view(&view);
-    dbg!(&view);
-    while view.states[view.active] == State::Player {
-        let action = basic_strategy(&view);
-        view = match game.action(action) {
-            Ok(view) => view,
-            Err(e) => panic!("Error encountered!: {:?}", e),
-        };
-        display_view(&view);
-        dbg!(&view);
+    for _ in 0..occurrences {
+        let mut game = Game::init(rules, player);
+        let mut view = game.bet(bet).unwrap();
+        while let State::Player(idx) = view.state {
+            let action = basic_strategy(&view, idx);
+            view = match game.action(action) {
+                Ok(view) => view,
+                Err(e) => panic!(
+                    "Player error encountered!: {:?} {:?} {} {:#?}",
+                    e, action, idx, view
+                ),
+            };
+        }
+
+        while view.state == blackjack::game::State::Dealer {
+            view = match game.dealer() {
+                Ok(view) => view,
+                Err(e) => panic!("Dealer error encountered!: {:?} {:#?}", e, view),
+            };
+        }
+
+        total += view.scores.len();
+        for score in view.scores {
+            match score {
+                Outcome::Win(_) => wins += 1,
+                Outcome::Blackjack(_) => bj += 1,
+                _ => {}
+            }
+        }
+        player = game.finish().unwrap();
     }
 
-    while view.states[view.active] == blackjack::game::State::Dealer {
-        view = game.update().unwrap();
-        display_view(&view);
-        dbg!(&view);
-    }
-    player = game.finish().unwrap();
-    println!("{}", player.chips);
+    format!(
+        "wins {:8}\tbj {:8}\ttotal {:8}\tcash {:8}\tP/L per wager {}",
+        wins,
+        bj,
+        total,
+        player.chips,
+        (player.chips as f64 - bankroll as f64) / total as f64,
+    )
 }
 
-// fn main() {
-//     let mut player = Player::new(100_000);
+fn main() {
+    let rules = Ruleset::default().decks(6);
 
-//     let mut wins = 0;
-//     let mut bj = 0;
-//     let mut total = 0;
-
-//     for i in 0..100_000 {
-//         let mut game = Game::init(player);
-//         let mut view = game.bet(1).unwrap();
-
-//         while view.state == blackjack::game::State::Player {
-//             // display_view(&view);
-//             // let action = if view.player.score() < 17 && view.dealer.score() > 6 {
-//             //     Action::Hit
-//             // } else {
-//             //     Action::Stand
-//             // };
-
-//             let action = basic_strategy(&view);
-
-//             view = match game.action(action) {
-//                 Ok(view) => view,
-//                 Err(e) => panic!("Error encountered!: {:?}", e),
-//             }
-//         }
-//         // display_view(&view);
-
-//         while view.state == blackjack::game::State::Dealer {
-//             // display_view(&view);
-//             view = game.update().unwrap();
-//         }
-
-//         match view.state {
-//             State::Final(fin) => match fin {
-//                 Outcome::Win(_) => wins += 1,
-//                 Outcome::Blackjack(_) => bj += 1,
-//                 _ => {}
-//             },
-//             _ => panic!("{:?}", view.state),
-//         }
-//         player = game.finish().unwrap();
-//         total += 1;
-//     }
-
-//     println!(
-//         "wins {} bj {} total {} cash {}",
-//         wins, bj, total, player.chips
-//     );
-//     println!(
-//         "WR: {}%, BJ: {}%",
-//         100.0 * wins as f32 / total as f32,
-//         100.0 * bj as f32 / total as f32
-//     );
-
-//     // let res = game.play(10, basic_strategy);
-
-//     // println!("{:?}", res);
-// }
+    // println!("{}", simulate(10000, 10, 100));
+    println!("{}", simulate(rules, 1_000_000, 1, 50_000));
+    println!(
+        "{}",
+        simulate(rules.decks(1).stand(false), 1_000_000, 1, 50_000)
+    );
+    println!(
+        "{}",
+        simulate(rules.decks(1).stand(true), 1_000_000, 1, 50_000)
+    );
+}
