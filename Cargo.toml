@@ -10,3 +10,5 @@ edition = "2018"
 rand = "0.7.0"
 rand_core = "*"
 sha2 = "0.8.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

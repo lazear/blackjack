@@ -1,8 +1,9 @@
 use super::card::{Card, Rank::*, Suit::*};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Deck {
     cards: Vec<Card>,
 }
@@ -48,6 +49,7 @@ impl Deck {
     pub fn notation(&self) -> String {
         self.cards
             .iter()
+            .copied()
             .map(Card::notation)
             .collect::<Vec<_>>()
             .join(" ")

@@ -116,17 +116,13 @@ fn simulate(
 
     let mut server_rng =
         blackjack::pcg::PCG32::new(thread_rng().next_u64(), thread_rng().next_u64());
-    let mut server_seed = server_rng.to_seed();
+    let server_seed = server_rng.to_seed();
 
     let mut player_rng = blackjack::pcg::PCG32::new(44, 54);
-    let mut player_seed = player_rng.to_seed();
+    let player_seed = player_rng.to_seed();
 
     for _ in 0..occurrences {
         let mut game = Game::init(rules, player, &mut server_rng);
-
-        if display {
-            dbg!(game.sha256());
-        }
         game.player_shuffle(&mut player_rng);
         if display {
             dbg!(game.sha256());
@@ -139,7 +135,7 @@ fn simulate(
                 display_view(&view);
             }
             let action = basic_strategy(&view, idx);
-            view = match game.action(action) {
+            view = match game.player(action) {
                 Ok(view) => view,
                 Err(e) => panic!(
                     "Player error encountered!: {:?} {:?} {} {:#?}",
@@ -148,16 +144,12 @@ fn simulate(
             };
         }
 
-        while view.state == blackjack::game::State::Dealer {
-            if display {
-                display_view(&view);
-            }
-            view = match game.dealer() {
-                Ok(view) => view,
-                Err(e) => panic!("Dealer error encountered!: {:?} {:#?}", e, view),
-            };
-        }
+        view = match game.dealer() {
+            Ok(view) => view,
+            Err(e) => panic!("Dealer error encountered!: {:?} {:#?}", e, view),
+        };
 
+        println!("{}", serde_json::to_string_pretty(&view).unwrap());
         total += view.scores.len();
         for score in view.scores {
             match score {
@@ -166,6 +158,7 @@ fn simulate(
                 _ => {}
             }
         }
+
         player = game.finish().unwrap();
 
         // Now make a mock deck to check everything was fair
@@ -173,10 +166,7 @@ fn simulate(
         server_rng = blackjack::pcg::PCG32::from_seed(server_seed);
         player_rng = blackjack::pcg::PCG32::from_seed(player_seed);
         deck.shuffle(&mut server_rng);
-        dbg!(deck.notation());
-        dbg!(deck.sha256());
         deck.shuffle(&mut player_rng);
-        dbg!(deck.notation());
         dbg!(deck.sha256());
     }
 
@@ -192,7 +182,7 @@ fn simulate(
 
 fn main() {
     let rules = Ruleset::default().decks(6);
-
+    println!("{}", serde_json::to_string_pretty(&rules).unwrap());
     // println!("{}", simulate(10000, 10, 100));
     println!("{}", simulate(rules, 1_000_000, 1, 1, true));
     // println!(

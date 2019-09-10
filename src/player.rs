@@ -1,7 +1,9 @@
 use super::*;
 use std::fmt;
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Default, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Player {
     // pub active: usize,
     pub hands: Vec<Hand>,
@@ -31,24 +33,22 @@ impl Player {
     }
 
     pub fn can_split(&self, idx: usize) -> bool {
-        if self.hands.len() >= 4 {
-            return false;
-        } else if self.hands.len() > 1 && self.hands[0].cards[0].rank == Rank::Ace {
+        if self.hands.len() >= 4
+            || (self.hands.len() > 1 && self.hands[0].cards[0].rank == Rank::Ace)
+        {
             return false;
         }
 
         if let Some(h) = self.hands.get(idx) {
-            if h.cards.len() == 2 {
-                if h.cards[0].value() == h.cards[1].value() {
-                    return true;
-                }
+            if h.cards.len() == 2 && h.cards[0].value() == h.cards[1].value() {
+                return true;
             }
         }
         false
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Hand {
     pub cards: Vec<Card>,
 }
@@ -111,6 +111,7 @@ impl fmt::Display for Hand {
             "{}",
             self.cards
                 .iter()
+                .copied()
                 .map(Card::notation)
                 .collect::<Vec<_>>()
                 .join(" ")

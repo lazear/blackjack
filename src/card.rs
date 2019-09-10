@@ -1,13 +1,14 @@
+use serde::{Deserialize, Serialize};
 use Rank::*;
 use Suit::*;
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct Card {
     pub rank: Rank,
     pub suit: Suit,
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub enum Suit {
     Hearts,
     Spades,
@@ -15,7 +16,7 @@ pub enum Suit {
     Diamonds,
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Deserialize, Serialize)]
 pub enum Rank {
     Two,
     Three,
@@ -40,7 +41,7 @@ impl std::ops::Deref for Card {
 }
 
 impl Card {
-    pub fn notation(&self) -> String {
+    pub fn notation(self) -> String {
         format!(
             "{}{}",
             match self.rank {
