@@ -1,5 +1,6 @@
 use super::card::{Card, Rank::*, Suit::*};
 use rand::Rng;
+use sha2::{Digest, Sha256};
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct Deck {
@@ -50,5 +51,11 @@ impl Deck {
             .map(Card::notation)
             .collect::<Vec<_>>()
             .join(" ")
+    }
+
+    pub fn sha256(&self) -> String {
+        let mut hasher = Sha256::default();
+        hasher.input(self.notation());
+        format!("{:0x}", hasher.result())
     }
 }

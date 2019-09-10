@@ -3,6 +3,7 @@
 //! A custom random number generator can be supplied, for instance, to always
 //! deal the same hands (with a deterministicly seeded PRNG) in the same order
 use super::*;
+use sha2::{Digest, Sha256};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Action {
@@ -66,6 +67,12 @@ pub enum Error {
 }
 
 impl Game {
+    pub fn sha256(&self) -> String {
+        let mut hasher = Sha256::default();
+        hasher.input(self.deck.notation());
+        format!("{:0x}", hasher.result())
+    }
+
     pub fn action(&mut self, action: Action) -> Result<View, Error> {
         let hidx;
         match self.state {
@@ -154,6 +161,12 @@ impl Game {
         };
         g.deck.shuffle(rng);
         g
+    }
+
+    pub fn player_shuffle<R: rand::Rng>(&mut self, rng: &mut R) {
+        if self.state == State::Ready {
+            self.deck.shuffle(rng);
+        }
     }
 
     /// Deal cards to all players

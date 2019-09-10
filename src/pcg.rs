@@ -2,21 +2,49 @@
 //! Adapted from http://www.pcg-random.org/
 
 use rand_core::{impls, Error, RngCore};
+use sha2::{Digest, Sha256};
 
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub struct PCG32 {
     state: u64,
     inc: u64,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub struct PCG32Seed(u64, u64);
+
+impl PCG32Seed {
+    pub fn new(state: u64, seq: u64) -> PCG32Seed {
+        PCG32Seed(state, seq)
+    }
+
+    pub fn sha256(&self) -> String {
+        let mut buf: [u8; 16] = [0u8; 16];
+        buf[0..8].copy_from_slice(&self.0.to_le_bytes());
+        buf[8..].copy_from_slice(&self.1.to_le_bytes());
+        let mut hasher = Sha256::default();
+        hasher.input(buf);
+        format!("{:0x}", hasher.result())
+    }
+}
+
 impl PCG32 {
-    pub fn seed(seed: u64, seq: u64) -> PCG32 {
-        let mut rng = PCG32 {
-            state: 0,
+    pub fn new(state: u64, seq: u64) -> PCG32 {
+        PCG32 {
+            state,
             inc: (seq << 1) | 1,
-        };
-        rng.next_u64();
-        rng.state = rng.state.wrapping_add(seed);
-        rng
+        }
+    }
+
+    pub fn from_seed(seed: PCG32Seed) -> PCG32 {
+        PCG32 {
+            state: seed.0,
+            inc: (seed.1 << 1) | 1,
+        }
+    }
+
+    pub fn to_seed(&self) -> PCG32Seed {
+        PCG32Seed(self.state, self.inc >> 1)
     }
 }
 

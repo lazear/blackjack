@@ -102,18 +102,42 @@ fn display_view(view: &View) {
     );
 }
 
-fn simulate(rules: Ruleset, bankroll: usize, bet: usize, occurrences: usize) -> String {
+fn simulate(
+    rules: Ruleset,
+    bankroll: usize,
+    bet: usize,
+    occurrences: usize,
+    display: bool,
+) -> String {
     let mut player = Player::new(bankroll);
     let mut wins = 0;
     let mut bj = 0;
     let mut total = 0;
 
-    // let mut rng = blackjack::pcg::PCG32::seed(44, 54);
-    let mut rng = rand::thread_rng();
+    let mut server_rng =
+        blackjack::pcg::PCG32::new(thread_rng().next_u64(), thread_rng().next_u64());
+    let mut server_seed = server_rng.to_seed();
+
+    let mut player_rng = blackjack::pcg::PCG32::new(44, 54);
+    let mut player_seed = player_rng.to_seed();
+
     for _ in 0..occurrences {
-        let mut game = Game::init(rules, player, &mut rng);
+        let mut game = Game::init(rules, player, &mut server_rng);
+
+        if display {
+            dbg!(game.sha256());
+        }
+        game.player_shuffle(&mut player_rng);
+        if display {
+            dbg!(game.sha256());
+        }
+
         let mut view = game.bet(bet).unwrap();
+
         while let State::Player(idx) = view.state {
+            if display {
+                display_view(&view);
+            }
             let action = basic_strategy(&view, idx);
             view = match game.action(action) {
                 Ok(view) => view,
@@ -125,6 +149,9 @@ fn simulate(rules: Ruleset, bankroll: usize, bet: usize, occurrences: usize) -> 
         }
 
         while view.state == blackjack::game::State::Dealer {
+            if display {
+                display_view(&view);
+            }
             view = match game.dealer() {
                 Ok(view) => view,
                 Err(e) => panic!("Dealer error encountered!: {:?} {:#?}", e, view),
@@ -140,6 +167,17 @@ fn simulate(rules: Ruleset, bankroll: usize, bet: usize, occurrences: usize) -> 
             }
         }
         player = game.finish().unwrap();
+
+        // Now make a mock deck to check everything was fair
+        let mut deck = Deck::new(rules.decks);
+        server_rng = blackjack::pcg::PCG32::from_seed(server_seed);
+        player_rng = blackjack::pcg::PCG32::from_seed(player_seed);
+        deck.shuffle(&mut server_rng);
+        dbg!(deck.notation());
+        dbg!(deck.sha256());
+        deck.shuffle(&mut player_rng);
+        dbg!(deck.notation());
+        dbg!(deck.sha256());
     }
 
     format!(
@@ -156,15 +194,15 @@ fn main() {
     let rules = Ruleset::default().decks(6);
 
     // println!("{}", simulate(10000, 10, 100));
-    println!("{}", simulate(rules, 1_000_000, 1, 50_000));
-    println!(
-        "{}",
-        simulate(rules.decks(1).stand(false), 1_000_000, 1, 50_000)
-    );
-    println!(
-        "{}",
-        simulate(rules.decks(1).stand(true), 1_000_000, 1, 50_000)
-    );
+    println!("{}", simulate(rules, 1_000_000, 1, 1, true));
+    // println!(
+    //     "{}",
+    //     simulate(rules.decks(1).stand(false), 1_000_000, 1, 50_000)
+    // );
+    // println!(
+    //     "{}",
+    //     simulate(rules.decks(1).stand(true), 1_000_000, 1, 50_000)
+    // );
 
     // let mut thread_rng = thread_rng();
 
@@ -172,4 +210,15 @@ fn main() {
     // println!("{}", deck.notation());
     // deck.shuffle(&mut rng);
     // println!("{}", deck.notation());
+
+    // let mut rng = blackjack::pcg::PCG32::new(42, 54);
+    // dbg!(rng.next_u64());
+    // dbg!(rng.next_u64());
+    // dbg!(rng.to_seed().sha256());
+
+    // let mut rng2 = blackjack::pcg::PCG32::from_seed(rng.to_seed());
+    // dbg!(rng2.to_seed().sha256());
+
+    // dbg!(rng.next_u64());
+    // dbg!(rng2.next_u64());
 }
