@@ -1,3 +1,7 @@
+//! The `game` module represents the Blackjack game engine and logic
+//!
+//! A custom random number generator can be supplied, for instance, to always
+//! deal the same hands (with a deterministicly seeded PRNG) in the same order
 use super::*;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -134,8 +138,8 @@ impl Game {
     }
 
     /// Initialize a game to the Ready state
-    pub fn init(rules: Ruleset, player: Player) -> Game {
-        Game {
+    pub fn init<R: rand::Rng>(rules: Ruleset, player: Player, rng: &mut R) -> Game {
+        let mut g = Game {
             rules,
             deck: Deck::new(6),
             dealer: Hand::default(),
@@ -147,7 +151,9 @@ impl Game {
                 suit: Suit::Clubs,
             }),
             scores: Vec::new(),
-        }
+        };
+        g.deck.shuffle(rng);
+        g
     }
 
     /// Deal cards to all players

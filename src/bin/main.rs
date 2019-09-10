@@ -1,5 +1,6 @@
 use blackjack;
 use blackjack::*;
+use rand::prelude::*;
 
 fn basic_strategy(view: &View, idx: usize) -> Action {
     let d = view.dealer.score();
@@ -107,8 +108,10 @@ fn simulate(rules: Ruleset, bankroll: usize, bet: usize, occurrences: usize) -> 
     let mut bj = 0;
     let mut total = 0;
 
+    // let mut rng = blackjack::pcg::PCG32::seed(44, 54);
+    let mut rng = rand::thread_rng();
     for _ in 0..occurrences {
-        let mut game = Game::init(rules, player);
+        let mut game = Game::init(rules, player, &mut rng);
         let mut view = game.bet(bet).unwrap();
         while let State::Player(idx) = view.state {
             let action = basic_strategy(&view, idx);
@@ -162,4 +165,11 @@ fn main() {
         "{}",
         simulate(rules.decks(1).stand(true), 1_000_000, 1, 50_000)
     );
+
+    // let mut thread_rng = thread_rng();
+
+    // let mut deck = blackjack::Deck::new(1);
+    // println!("{}", deck.notation());
+    // deck.shuffle(&mut rng);
+    // println!("{}", deck.notation());
 }

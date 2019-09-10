@@ -1,5 +1,5 @@
 use super::card::{Card, Rank::*, Suit::*};
-use rand::{thread_rng, Rng};
+use rand::Rng;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct Deck {
@@ -25,17 +25,14 @@ impl Deck {
                 }
             }
         }
-
-        deck.shuffle();
         deck
     }
 
     /// Fisher-Yates shuffling algorithim
-    pub fn shuffle(&mut self) {
-        let mut rng = thread_rng();
-        for i in (0..self.cards.len()).rev() {
-            let j = (rng.gen::<f32>() * self.cards.len() as f32).floor() as usize;
-            self.cards.swap(i, j);
+    pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
+        let n = self.cards.len();
+        for i in (0..n).rev() {
+            self.cards.swap(i, rng.gen_range(0, n));
         }
     }
 
@@ -52,6 +49,6 @@ impl Deck {
             .iter()
             .map(Card::notation)
             .collect::<Vec<_>>()
-            .concat()
+            .join(" ")
     }
 }
